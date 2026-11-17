@@ -96,11 +96,11 @@ export function formatNonJsonApiError(
     /^\s*(<!doctype\s+html\b|<html\b)/i.test(text || '');
   if (!isHtml) return null;
 
-  if (status === 404) {
+  if (status === 404 || (status >= 200 && status < 300)) {
     return {
       code: 'BACKEND_API_UNAVAILABLE',
       message:
-        `Backend API endpoint (${url}) returned HTTP 404 (Page Not Found). Static Firebase Hosting only serves frontend files — ensure the Node.js Express backend (server.ts) is deployed and routed via firebase.json "/api/**" rewrite or VITE_API_BASE_URL.`,
+        `Backend API endpoint (${url}) is not reachable (received HTML instead of JSON). Static Firebase Hosting only serves frontend files — deploy the Express server (server.ts) on a Node host and rebuild with VITE_API_BASE_URL set to your backend URL.`,
     };
   }
   return {
@@ -144,10 +144,11 @@ export async function apiRequest<T = any>(
     notifyAuthExpired(url);
   }
 
+  if (htmlError) {
+    throw new ApiError(htmlError.message, response.status, htmlError.code);
+  }
+
   if (!response.ok) {
-    if (htmlError) {
-      throw new ApiError(htmlError.message, response.status, htmlError.code);
-    }
     const errMsg =
       parsed?.error?.message ||
       (typeof parsed?.error === 'string' ? parsed.error : '') ||
@@ -405,6 +406,17 @@ class BackendDbQueryBuilder<T = any> implements PromiseLike<DbResult<T>> {
 
       if (response.status === 401) {
         notifyAuthExpired(apiPath);
+      }
+
+      if (htmlError) {
+        return {
+          data: null,
+          error: {
+            message: htmlError.message,
+            code: htmlError.code,
+            status: response.status,
+          },
+        };
       }
 
       if (!response.ok) {
