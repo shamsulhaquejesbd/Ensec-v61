@@ -437,6 +437,21 @@ export function subscribeErpEvents(onEvent: (evt: ErpRealtimeEvent) => void): ()
         // Ignore malformed SSE payload
       }
     });
+    source.addEventListener('system-branding', (msg: MessageEvent) => {
+      if (closed || !msg.data) return;
+      try {
+        const parsed = JSON.parse(msg.data);
+        if (parsed && typeof parsed.softwareName === 'string') {
+          window.dispatchEvent(
+            new CustomEvent('ensec-system-branding-updated', {
+              detail: parsed,
+            })
+          );
+        }
+      } catch {
+        // Ignore malformed SSE branding payload
+      }
+    });
   } catch {
     // Graceful fallback if SSE fails to initialize
   }

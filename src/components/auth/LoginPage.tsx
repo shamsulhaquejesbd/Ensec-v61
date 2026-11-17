@@ -10,8 +10,10 @@ import {
   ShieldCheck,
   UserPlus,
   Building,
+  BatteryCharging,
 } from 'lucide-react';
 import { useERP } from '../../context/ERPContext.tsx';
+import { useSystemSettings } from '../../context/SystemSettingsContext.tsx';
 import { User, Role, getDefaultPermissionsForRole } from '../../types/erp.ts';
 import { apiAuth } from '../../lib/apiClient.ts';
 
@@ -21,6 +23,7 @@ export interface LoginPageProps {
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const { users, login, addUser } = useERP();
+  const { branding } = useSystemSettings();
 
   // Sign In credentials state: Clean and empty by default (no auto-fill or backdoors)
   const [identifier, setIdentifier] = useState<string>('');
@@ -282,12 +285,27 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       <div className="relative z-10 w-full max-w-[400px] sm:max-w-[430px] bg-white/95 backdrop-blur-xl border border-slate-200/90 rounded-[28px] shadow-[0_20px_50px_-12px_rgba(15,23,42,0.12),0_0_0_1px_rgba(15,23,42,0.04)] p-7 sm:p-9 space-y-5">
         {/* Header */}
         <div className="text-center pt-1 pb-1">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200/70 text-indigo-700 text-[11px] font-semibold tracking-wider uppercase mb-3 shadow-xs">
+          <div className="flex justify-center mb-3.5">
+            {branding.logoDataUrl ? (
+              <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200/90 shadow-sm p-1.5 flex items-center justify-center overflow-hidden">
+                <img
+                  src={branding.logoDataUrl}
+                  alt={branding.softwareName}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            ) : (
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 via-blue-600 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+                <BatteryCharging className="w-7 h-7" />
+              </div>
+            )}
+          </div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200/70 text-indigo-700 text-[11px] font-semibold tracking-wider uppercase mb-2.5 shadow-xs">
             <Lock className="w-3.5 h-3.5 text-indigo-600" />
             <span>Secure Access Gateway</span>
           </div>
-          <h1 className="text-2xl sm:text-[30px] font-extrabold text-slate-900 tracking-tight leading-tight">
-            WELCOME TO ENSEC
+          <h1 className="text-2xl sm:text-[28px] font-extrabold text-slate-900 tracking-tight leading-tight">
+            Welcome to {branding.softwareName}
           </h1>
           <p className="text-sm text-slate-500 font-normal mt-1.5">
             Sign in with your User ID and Password
@@ -397,7 +415,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           <div className="pt-3 border-t border-slate-100 space-y-2.5 text-center">
             <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 font-medium">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>Ensec Lithium Batteries BD • Enterprise RBAC Protected</span>
+              <span>{branding.softwareName} • Enterprise RBAC Protected</span>
             </div>
           </div>
         </form>

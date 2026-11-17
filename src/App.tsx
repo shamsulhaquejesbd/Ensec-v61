@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ERPProvider, useERP } from './context/ERPContext.tsx';
 import { CashBankProvider } from './context/CashBankContext.tsx';
+import { SystemSettingsProvider, useSystemSettings } from './context/SystemSettingsContext.tsx';
 import { Sidebar } from './components/common/Sidebar.tsx';
 import { ArchitectureBlueprintModal } from './components/architecture/ArchitectureBlueprintModal.tsx';
 import { ExecutiveDashboard } from './components/dashboard/ExecutiveDashboard.tsx';
@@ -28,6 +29,7 @@ import { OvertimeModule } from './components/overtime/OvertimeModule.tsx';
 import { ReportsModule } from './components/reports/ReportsModule.tsx';
 import { OrgHierarchyAndRoles } from './components/settings/OrgHierarchyAndRoles.tsx';
 import { DatabaseManagementPage } from './components/settings/DatabaseManagementPage.tsx';
+import { SettingsPage } from './components/settings/SettingsPage.tsx';
 import { UserManagementModule } from './components/users/UserManagementModule.tsx';
 import {
   FinishedProductsPage,
@@ -51,7 +53,7 @@ import { RawMaterialInventoryPage } from './components/inventory/RawMaterialInve
 import { WarrantyManagementModule } from './components/warranty/WarrantyManagementModule.tsx';
 import { LoginPage } from './components/auth/LoginPage.tsx';
 import { ProductionCostSheetModal } from './components/manufacturing/ProductionCostSheetModal.tsx';
-import { canViewManufacturingCostSheet } from './types/pagePermissions.ts';
+import { canAccessSystemSettings, canViewManufacturingCostSheet } from './types/pagePermissions.ts';
 import {
   getFirstAccessibleModule,
   isUserPermittedForModule,
@@ -152,7 +154,8 @@ export function pathnameToModule(pathname: string): string {
     'basic-data-banks': 'basic-data-banks',
     'basic-data-uom': 'basic-data-uom',
     'basic-data-offers': 'basic-data-offers',
-    'settings': 'settings-database-management',
+    'settings': 'settings',
+    'settings/branding': 'settings',
     'settings/database-management': 'settings-database-management',
     'settings-database-management': 'settings-database-management',
     'database-management': 'settings-database-management',
@@ -180,7 +183,7 @@ export function moduleToPathname(module: string): string {
     'sales-orders': '/sales',
     'users-permissions': '/users',
     'overtime-management': '/overtime',
-    'settings': '/settings/database-management',
+    'settings': '/settings',
     'settings-database-management': '/settings/database-management',
   };
 
@@ -189,6 +192,7 @@ export function moduleToPathname(module: string): string {
 
 function MainApp() {
   const { currentUser, isAuthenticated, logout, productionOrders } = useERP();
+  const { branding } = useSystemSettings();
 
   // Initialize activeModule from current browser pathname so F5 refresh preserves route!
   const [activeModule, setActiveModule] = useState<string>(() => {
@@ -292,8 +296,10 @@ function MainApp() {
   }
 
   const isModulePermitted =
-    (activeModule === 'settings-database-management' || activeModule === 'settings')
+    activeModule === 'settings-database-management'
       ? currentUser.role === 'Super Admin'
+      : activeModule === 'settings'
+      ? canAccessSystemSettings(currentUser)
       : currentUser.role === 'Super Admin' || isUserPermittedForModule(currentUser, activeModule);
 
   const isMobilePortal = activeModule === 'mobile-field';
@@ -310,7 +316,18 @@ function MainApp() {
             <Menu className="w-4 h-4" />
             <span>Menu</span>
           </button>
-          <span className="font-extrabold text-xs tracking-tight text-blue-600 dark:text-blue-400">ENSEC ERP</span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            {branding.logoDataUrl && (
+              <img
+                src={branding.logoDataUrl}
+                alt={branding.softwareName}
+                className="w-5 h-5 rounded object-contain shrink-0"
+              />
+            )}
+            <span className="font-extrabold text-xs tracking-tight text-blue-600 dark:text-blue-400 truncate max-w-[180px]">
+              {branding.softwareName}
+            </span>
+          </div>
           <div className="w-8"></div>
         </div>
       )}
@@ -594,7 +611,10 @@ function MainApp() {
               )}
               {activeModule === 'reports' && <ReportsModule />}
               {activeModule === 'users-permissions' && <UserManagementModule />}
-              {(activeModule === 'settings-database-management' || activeModule === 'settings') &&
+              {activeModule === 'settings' && canAccessSystemSettings(currentUser) && (
+                <SettingsPage />
+              )}
+              {activeModule === 'settings-database-management' &&
                 currentUser.role === 'Super Admin' && <DatabaseManagementPage />}
               {(activeModule === 'warranty' || activeModule.startsWith('warranty-')) && (
                 <WarrantyManagementModule
@@ -617,9 +637,11 @@ function MainApp() {
 export default function App() {
   return (
     <ERPProvider>
-      <CashBankProvider>
-        <MainApp />
-      </CashBankProvider>
+      <SystemSettingsProvider>
+        <CashBankProvider>
+          <MainApp />
+        </CashBankProvider>
+      </SystemSettingsProvider>
     </ERPProvider>
   );
 }

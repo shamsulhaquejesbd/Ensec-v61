@@ -76,9 +76,13 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { useERP } from '../../context/ERPContext.tsx';
+import { useSystemSettings } from '../../context/SystemSettingsContext.tsx';
 import { ThemeToggle } from './ThemeToggle.tsx';
 import { NotificationCenterDrawer } from './NotificationCenterDrawer.tsx';
-import { canViewCollectionNotification } from '../../types/pagePermissions.ts';
+import {
+  canAccessSystemSettings,
+  canViewCollectionNotification,
+} from '../../types/pagePermissions.ts';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -129,6 +133,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     updateUserPassword,
     installmentNotifications,
   } = useERP();
+  const { branding } = useSystemSettings();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifDrawer, setShowNotifDrawer] = useState(false);
   const canViewCollectionNotifications = canViewCollectionNotification(currentUser);
@@ -442,8 +447,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: 'Settings',
           icon: Settings,
           isDropdown: true,
-          superAdminOnly: true,
           children: [
+            {
+              id: 'settings',
+              label: 'System Settings',
+              icon: SlidersHorizontal,
+            },
             {
               id: 'settings-database-management',
               label: 'Database Management',
@@ -481,23 +490,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onSelectModule('dashboard');
               onClose();
             }}
-            className="flex items-center gap-2 cursor-pointer select-none"
+            className="flex items-center gap-2 cursor-pointer select-none min-w-0"
           >
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-xs">
-              <BatteryCharging className="w-4.5 h-4.5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1">
-                <span className="font-black text-sm tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
-                  ENSEC
-                </span>
-                <span className="text-[9px] uppercase font-bold tracking-wider px-1 py-0.2 rounded bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300">
-                  ERP
-                </span>
+            {branding.logoDataUrl ? (
+              <img
+                src={branding.logoDataUrl}
+                alt={branding.softwareName}
+                className="w-8 h-8 rounded-xl object-contain bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-0.5 shadow-xs shrink-0"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-xs shrink-0">
+                <BatteryCharging className="w-4.5 h-4.5" />
               </div>
-              <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-none">
-                Lithium Battery BD
-              </p>
+            )}
+            <div className="min-w-0">
+              {(() => {
+                const isDefaultEnsec = branding.softwareName.trim().toLowerCase() === 'ensec';
+                return (
+                  <>
+                    <div className="flex items-center gap-1">
+                      <span className="font-black text-sm tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent truncate max-w-[130px]">
+                        {isDefaultEnsec ? 'ENSEC' : branding.softwareName}
+                      </span>
+                      {isDefaultEnsec && (
+                        <span className="text-[9px] uppercase font-bold tracking-wider px-1 py-0.2 rounded bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 shrink-0">
+                          ERP
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-none truncate max-w-[140px]">
+                      {isDefaultEnsec ? 'Lithium Battery BD' : 'Enterprise Resource Planning'}
+                    </p>
+                  </>
+                );
+              })()}
             </div>
           </div>
 
@@ -535,8 +561,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           {navSections.map((section, sIdx) => {
             const isSuperAdmin = currentUser?.role === 'Super Admin';
-            const canViewItem = (id: string, superAdminOnly?: boolean) =>
-              superAdminOnly ? isSuperAdmin : currentUserHasPermission(id);
+            const canViewItem = (id: string, superAdminOnly?: boolean) => {
+              if (superAdminOnly) return isSuperAdmin;
+              if (id === 'settings') return canAccessSystemSettings(currentUser);
+              return currentUserHasPermission(id);
+            };
 
             const permittedItems = section.items.filter((item) => {
               if (item.superAdminOnly && !isSuperAdmin) return false;
@@ -580,7 +609,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           <button
                             onClick={() => {
                               toggleDropdown(item.id);
-                              onSelectModule(item.id === 'settings' ? 'settings-database-management' : item.id);
+                              onSelectModule(item.id);
                             }}
                             className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group ${
                               isActive || isChildActive

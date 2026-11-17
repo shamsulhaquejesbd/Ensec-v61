@@ -1,5 +1,6 @@
 import type { User } from '../types/erp.ts';
 import {
+  canAccessSystemSettings,
   canApproveFactoryExpense,
   canAllocateManufacturingOverhead,
   canPostFactoryExpense,
@@ -153,6 +154,7 @@ export const SIDEBAR_ORDERED_MODULES: readonly string[] = [
   'warranty-settings',
   'warranty',
   'users-permissions',
+  'settings',
   'settings-database-management',
 ];
 
@@ -166,7 +168,10 @@ export function isUserPermittedForModule(
 ): boolean {
   if (!user || !user.id || user.id === 'guest') return false;
   if (user.status === 'Blocked' || user.status === 'Inactive') return false;
-  if (moduleId === 'settings' || moduleId === 'settings-database-management') {
+  if (moduleId === 'settings') {
+    return canAccessSystemSettings(user);
+  }
+  if (moduleId === 'settings-database-management') {
     return user.role === 'Super Admin';
   }
   if (user.role === 'Super Admin') return true;

@@ -1032,6 +1032,16 @@ export const ERP_PAGE_PERMISSIONS_REGISTRY: ERPModuleCategory[] = [
           { key: 'delete_user', label: 'Deactivate / Remove User', description: 'Can deactivate or remove staff accounts', isDestructive: true },
         ],
       },
+      {
+        id: 'settings',
+        name: 'System Settings & Branding',
+        category: 'User & Warranty',
+        description: 'Global system settings including Software Name, Software Logo, and platform configuration.',
+        actions: [
+          { key: 'view', label: 'View System Settings', description: 'Can open the System Settings page' },
+          { key: 'manage_branding', label: 'Manage System Branding', description: 'Can update global Software Name and Software Logo', isApprovalAction: true },
+        ],
+      },
     ],
   },
 ];
@@ -1318,7 +1328,9 @@ export const PERMISSION_TEMPLATES: PermissionTemplate[] = [
       ALL_ERP_PAGES.forEach((page) => {
         map[page.id] = {};
         page.actions.forEach((act) => {
-          if (
+          if (page.id === 'settings') {
+            map[page.id][act.key] = false;
+          } else if (
             act.key === 'view' ||
             act.key === 'view_raw_material_stock_value' ||
             act.key === 'view_raw_material_purchase_rate' ||
@@ -1761,4 +1773,19 @@ export function hasAnyManufacturingCostingAccess(user: any): boolean {
     canExportManufacturingCostSheets(user)
   );
 }
+
+export function canAccessSystemSettings(user: any): boolean {
+  if (!user || !user.id || user.id === 'guest') return false;
+  if (user.status === 'Blocked' || user.status === 'Inactive') return false;
+  if (user.role === 'Super Admin' || user.role === 'Admin') return true;
+  return hasPageAction(user, 'settings', 'view') || hasPageAction(user, 'settings', 'manage_branding');
+}
+
+export function canManageSystemBranding(user: any): boolean {
+  if (!user || !user.id || user.id === 'guest') return false;
+  if (user.status === 'Blocked' || user.status === 'Inactive') return false;
+  if (user.role === 'Super Admin' || user.role === 'Admin') return true;
+  return hasPageAction(user, 'settings', 'manage_branding');
+}
+
 

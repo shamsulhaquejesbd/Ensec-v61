@@ -45,6 +45,27 @@ export function emitErpTableEvent(event: Omit<ErpRealtimeEventPayload, 'timestam
   }
 }
 
+export function emitSystemBrandingEvent(branding: {
+  softwareName: string;
+  logoDataUrl: string | null;
+  updatedAt: string | null;
+}) {
+  if (activeSseClients.size === 0) return;
+
+  const frame = `event: system-branding\ndata: ${JSON.stringify({
+    branding,
+    timestamp: new Date().toISOString(),
+  })}\n\n`;
+
+  for (const [clientId, client] of activeSseClients.entries()) {
+    try {
+      client.res.write(frame);
+    } catch {
+      activeSseClients.delete(clientId);
+    }
+  }
+}
+
 export function registerEventsRoutes(app: express.Application) {
   app.get('/api/erp/events', async (req, res) => {
     const caller = await resolveRequestUser(req);

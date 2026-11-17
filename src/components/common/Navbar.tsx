@@ -12,6 +12,7 @@ import {
   Bell,
 } from 'lucide-react';
 import { useERP } from '../../context/ERPContext.tsx';
+import { useSystemSettings } from '../../context/SystemSettingsContext.tsx';
 import { ThemeToggle } from './ThemeToggle.tsx';
 import { Role } from '../../types/erp.ts';
 import { NotificationCenterDrawer } from './NotificationCenterDrawer.tsx';
@@ -25,6 +26,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, onNavigate, activeModule }) => {
   const { currentUser, logout, setShowArchitectureModal, installmentNotifications } = useERP();
+  const { branding } = useSystemSettings();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifDrawer, setShowNotifDrawer] = useState(false);
   const canViewCollectionNotifications = canViewCollectionNotification(currentUser);
@@ -46,21 +48,40 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, onNavigate, act
           onClick={() => onNavigate('dashboard')}
           className="flex items-center gap-2.5 cursor-pointer select-none"
         >
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
-            <BatteryCharging className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
-                ENSEC
-              </span>
-              <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300">
-                ERP BD
-              </span>
+          {branding.logoDataUrl ? (
+            <img
+              src={branding.logoDataUrl}
+              alt={branding.softwareName}
+              className="w-9 h-9 rounded-xl object-contain bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-0.5 shadow-sm shrink-0"
+            />
+          ) : (
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0">
+              <BatteryCharging className="w-5 h-5" />
             </div>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-none">
-              Lithium Battery Distribution & Optimum JV
-            </p>
+          )}
+          <div>
+            {(() => {
+              const isDefaultEnsec = branding.softwareName.trim().toLowerCase() === 'ensec';
+              return (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
+                      {isDefaultEnsec ? 'ENSEC' : branding.softwareName}
+                    </span>
+                    {isDefaultEnsec && (
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300">
+                        ERP BD
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-none">
+                    {isDefaultEnsec
+                      ? 'Lithium Battery Distribution & Optimum JV'
+                      : 'Enterprise Resource Planning'}
+                  </p>
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>

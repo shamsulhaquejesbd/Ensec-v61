@@ -35,6 +35,7 @@ import {
 import { registerEventsRoutes, emitErpTableEvent } from './server/routes/events.ts';
 import { registerErpGatewayRoutes } from './server/routes/erpGateway.ts';
 import { registerDatabaseMigrationRoutes } from './server/routes/databaseMigrationRoutes.ts';
+import { registerSystemSettingsRoutes } from './server/routes/systemSettingsRoutes.ts';
 import { hasPageAction } from './src/types/pagePermissions.ts';
 import {
   DEFAULT_ALLOWED_RADIUS_METERS,
@@ -371,7 +372,7 @@ export function createAppServer() {
   const app = express();
   app.set('trust proxy', true);
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '2mb' }));
+  app.use(express.json({ limit: '4mb' }));
 
   // Host Header Validation + CSRF / Origin Protection for /api/*
   app.use('/api', (req, res, next) => {
@@ -2527,6 +2528,7 @@ export function createAppServer() {
   // Register Centralized Domain DB Gateway (58 tables) & Real-time SSE Events
   // --------------------------------------------------------------------------
   registerEventsRoutes(app);
+  registerSystemSettingsRoutes(app);
   registerErpGatewayRoutes(app);
 
   // --------------------------------------------------------------------------
