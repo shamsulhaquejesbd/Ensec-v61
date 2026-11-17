@@ -265,4 +265,20 @@ describe('System Settings & Global System Branding', () => {
     assert.equal(resetLogoBody.branding?.softwareName, 'Aman ERP');
     assert.equal(resetLogoBody.branding?.logoDataUrl, null);
   });
+
+  test('formatNonJsonApiError converts Firebase Hosting HTML 404 into an actionable message', async () => {
+    const { formatNonJsonApiError } = await import('../src/lib/apiClient.ts');
+    const firebase404Html =
+      '<!DOCTYPE html> <html> <head><title>Page Not Found</title></head> <body><h2>404</h2><h1>Page Not Found</h1></body> </html>';
+    const formatted = formatNonJsonApiError(
+      '/api/auth/login',
+      404,
+      firebase404Html,
+      'text/html; charset=utf-8'
+    );
+    assert.ok(formatted);
+    assert.equal(formatted.code, 'BACKEND_API_UNAVAILABLE');
+    assert.match(formatted.message, /Static Firebase Hosting only serves frontend files/i);
+    assert.doesNotMatch(formatted.message, /<!DOCTYPE html>/i);
+  });
 });

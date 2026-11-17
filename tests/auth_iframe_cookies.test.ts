@@ -137,6 +137,52 @@ describe('Auth Session Cookies & Reverse-Proxy Origin Handling', () => {
     }
   });
 
+  test('Explicit CORS_ALLOWED_ORIGINS enables Firebase Hosting cross-origin preflight and login while blocking unlisted origins', async () => {
+    const prevCors = process.env.CORS_ALLOWED_ORIGINS;
+    process.env.CORS_ALLOWED_ORIGINS = 'https://ensecerp.web.app,https://ensecerp.firebaseapp.com';
+    try {
+      // Allowed preflight
+      const optAllowed = await fetch(`${baseUrl}/api/auth/login`, {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://ensecerp.web.app',
+          'Access-Control-Request-Method': 'POST',
+        },
+      });
+      assert.equal(optAllowed.status, 204);
+      assert.equal(optAllowed.headers.get('access-control-allow-origin'), 'https://ensecerp.web.app');
+      assert.equal(optAllowed.headers.get('access-control-allow-credentials'), 'true');
+
+      // Allowed cross-site POST login
+      const loginAllowed = await fetch(`${baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'https://ensecerp.web.app',
+          'Sec-Fetch-Site': 'cross-site',
+        },
+        body: JSON.stringify({ identifier: 'shamsul', password: '123456' }),
+      });
+      assert.equal(loginAllowed.status, 200);
+      assert.equal(loginAllowed.headers.get('access-control-allow-origin'), 'https://ensecerp.web.app');
+
+      // Unlisted cross-site origin remains blocked (403)
+      const loginBlocked = await fetch(`${baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'https://evil-attacker.example.com',
+          'Sec-Fetch-Site': 'cross-site',
+        },
+        body: JSON.stringify({ identifier: 'shamsul', password: '123456' }),
+      });
+      assert.equal(loginBlocked.status, 403);
+    } finally {
+      if (prevCors === undefined) delete process.env.CORS_ALLOWED_ORIGINS;
+      else process.env.CORS_ALLOWED_ORIGINS = prevCors;
+    }
+  });
+
   test('Unconfigured DB with empty user cache returns 503 DATABASE_NOT_CONFIGURED instead of false invalid-user error', async () => {
     const prevUrl = process.env.SUPABASE_URL;
     const prevKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

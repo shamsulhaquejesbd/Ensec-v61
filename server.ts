@@ -368,22 +368,78 @@ function getAllowedServerHosts(req: express.Request): Set<string> {
   return hosts;
 }
 
+function getAllowedCorsOrigins(): Set<string> {
+  const origins = new Set<string>();
+  const raw = [
+    process.env.CORS_ALLOWED_ORIGINS || '',
+    process.env.FRONTEND_URL || '',
+  ]
+    .join(',')
+    .split(',');
+  for (const item of raw) {
+    const clean = item.trim().replace(/\/+$/, '').toLowerCase();
+    if (!clean) continue;
+    try {
+      origins.add(new URL(clean).origin.toLowerCase());
+    } catch {
+      // Ignore malformed origin entries
+    }
+  }
+  return origins;
+}
+
 export function createAppServer() {
   const app = express();
   app.set('trust proxy', true);
   app.disable('x-powered-by');
   app.use(express.json({ limit: '4mb' }));
 
-  // Host Header Validation + CSRF / Origin Protection for /api/*
+  // Host Header Validation + CSRF / Origin Protection + Explicit CORS Allowlist for /api/*
   app.use('/api', (req, res, next) => {
     const rawHost = String(req.headers['host'] || '').trim();
     if (!rawHost || /[\s@\\/]/.test(rawHost)) {
       return res.status(400).json({ ok: false, code: 'INVALID_HOST_HEADER', error: 'Invalid Host header.' });
     }
 
+    const originHdr = String(req.headers['origin'] || '').trim();
+    const allowedCorsOrigins = getAllowedCorsOrigins();
+    let normalizedOrigin = '';
+    if (originHdr) {
+      try {
+        normalizedOrigin = new URL(originHdr).origin.toLowerCase();
+      } catch {
+        normalizedOrigin = '';
+      }
+    }
+    const isExplicitCorsOriginAllowed = Boolean(
+      normalizedOrigin && allowedCorsOrigins.has(normalizedOrigin)
+    );
+
+    if (isExplicitCorsOriginAllowed) {
+      res.setHeader('Access-Control-Allow-Origin', originHdr);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+      res.setHeader(
+        'Access-Control-Allow-Headers',
+        'Content-Type, Authorization, X-CSRF-Token, X-ERP-Session-Token, X-Mobile-Portal'
+      );
+      res.setHeader('Vary', 'Origin');
+    }
+
+    if (req.method.toUpperCase() === 'OPTIONS') {
+      if (isExplicitCorsOriginAllowed) {
+        return res.status(204).end();
+      }
+      return res.status(403).json({
+        ok: false,
+        code: 'CORS_ORIGIN_FORBIDDEN',
+        error: 'Forbidden: Preflight Origin is not allowed.',
+      });
+    }
+
     if (STATE_CHANGING_METHODS.has(req.method.toUpperCase())) {
       const secFetchSite = String(req.headers['sec-fetch-site'] || '').trim().toLowerCase();
-      if (secFetchSite === 'cross-site') {
+      if (secFetchSite === 'cross-site' && !isExplicitCorsOriginAllowed) {
         return res.status(403).json({
           ok: false,
           code: 'CSRF_CROSS_SITE_BLOCKED',
@@ -392,13 +448,12 @@ export function createAppServer() {
       }
 
       const allowedHosts = getAllowedServerHosts(req);
-      const originHdr = String(req.headers['origin'] || '').trim();
       const refererHdr = String(req.headers['referer'] || '').trim();
 
       if (originHdr) {
         try {
           const originHost = new URL(originHdr).host.toLowerCase();
-          if (!allowedHosts.has(originHost)) {
+          if (!allowedHosts.has(originHost) && !isExplicitCorsOriginAllowed) {
             return res.status(403).json({
               ok: false,
               code: 'CSRF_ORIGIN_MISMATCH',
@@ -414,8 +469,10 @@ export function createAppServer() {
         }
       } else if (refererHdr) {
         try {
-          const refHost = new URL(refererHdr).host.toLowerCase();
-          if (!allowedHosts.has(refHost)) {
+          const refUrl = new URL(refererHdr);
+          const refHost = refUrl.host.toLowerCase();
+          const refOrigin = refUrl.origin.toLowerCase();
+          if (!allowedHosts.has(refHost) && !allowedCorsOrigins.has(refOrigin)) {
             return res.status(403).json({
               ok: false,
               code: 'CSRF_REFERER_MISMATCH',

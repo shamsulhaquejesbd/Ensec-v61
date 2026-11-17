@@ -73,11 +73,48 @@ export function getCsrfHeaders(method?: string): Record<string, string> {
   return token ? { 'X-CSRF-Token': token } : {};
 }
 
+const API_BASE_URL =
+  typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_BASE_URL
+    ? String((import.meta as any).env.VITE_API_BASE_URL).trim().replace(/\/+$/, '')
+    : '';
+
+export function resolveApiUrl(url: string): string {
+  if (!API_BASE_URL || !url.startsWith('/api/')) {
+    return url;
+  }
+  return `${API_BASE_URL}${url}`;
+}
+
+export function formatNonJsonApiError(
+  url: string,
+  status: number,
+  text: string,
+  contentType?: string | null
+): { message: string; code: string } | null {
+  const isHtml =
+    Boolean(contentType && contentType.toLowerCase().includes('text/html')) ||
+    /^\s*(<!doctype\s+html\b|<html\b)/i.test(text || '');
+  if (!isHtml) return null;
+
+  if (status === 404) {
+    return {
+      code: 'BACKEND_API_UNAVAILABLE',
+      message:
+        `Backend API endpoint (${url}) returned HTTP 404 (Page Not Found). Static Firebase Hosting only serves frontend files — ensure the Node.js Express backend (server.ts) is deployed and routed via firebase.json "/api/**" rewrite or VITE_API_BASE_URL.`,
+    };
+  }
+  return {
+    code: `HTTP_${status}_HTML`,
+    message: `Backend API endpoint (${url}) returned an unexpected HTML response (HTTP ${status}). Please verify the backend server is running.`,
+  };
+}
+
 export async function apiRequest<T = any>(
   url: string,
   options: ApiRequestOptions = {}
 ): Promise<T> {
   const { skipAuthEvent = false, headers: customHeaders, ...rest } = options;
+  const resolvedUrl = resolveApiUrl(url);
 
   const headers: Record<string, string> = {
     ...(rest.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
@@ -85,15 +122,17 @@ export async function apiRequest<T = any>(
     ...(customHeaders as Record<string, string> | undefined),
   };
 
-  const response = await fetch(url, {
+  const response = await fetch(resolvedUrl, {
     ...rest,
     credentials: 'include',
     headers,
   });
 
   const text = await response.text();
+  const contentType = response.headers.get('content-type');
   let parsed: any = null;
-  if (text) {
+  const htmlError = formatNonJsonApiError(url, response.status, text, contentType);
+  if (text && !htmlError) {
     try {
       parsed = JSON.parse(text);
     } catch {
@@ -106,6 +145,9 @@ export async function apiRequest<T = any>(
   }
 
   if (!response.ok) {
+    if (htmlError) {
+      throw new ApiError(htmlError.message, response.status, htmlError.code);
+    }
     const errMsg =
       parsed?.error?.message ||
       (typeof parsed?.error === 'string' ? parsed.error : '') ||
@@ -327,7 +369,8 @@ class BackendDbQueryBuilder<T = any> implements PromiseLike<DbResult<T>> {
 
   private async execute(): Promise<DbResult<T>> {
     try {
-      const response = await fetch(`/api/erp/db/${encodeURIComponent(this.table)}`, {
+      const apiPath = `/api/erp/db/${encodeURIComponent(this.table)}`;
+      const response = await fetch(resolveApiUrl(apiPath), {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -349,8 +392,10 @@ class BackendDbQueryBuilder<T = any> implements PromiseLike<DbResult<T>> {
       });
 
       const text = await response.text();
+      const contentType = response.headers.get('content-type');
+      const htmlError = formatNonJsonApiError(apiPath, response.status, text, contentType);
       let parsed: any = null;
-      if (text) {
+      if (text && !htmlError) {
         try {
           parsed = JSON.parse(text);
         } catch {
@@ -359,7 +404,7 @@ class BackendDbQueryBuilder<T = any> implements PromiseLike<DbResult<T>> {
       }
 
       if (response.status === 401) {
-        notifyAuthExpired(`/api/erp/db/${this.table}`);
+        notifyAuthExpired(apiPath);
       }
 
       if (!response.ok) {
@@ -367,10 +412,11 @@ class BackendDbQueryBuilder<T = any> implements PromiseLike<DbResult<T>> {
           data: null,
           error: {
             message:
+              htmlError?.message ||
               parsed?.error?.message ||
               (typeof parsed?.error === 'string' ? parsed.error : '') ||
               `Database gateway error (${response.status})`,
-            code: parsed?.error?.code || parsed?.code || `HTTP_${response.status}`,
+            code: htmlError?.code || parsed?.error?.code || parsed?.code || `HTTP_${response.status}`,
             status: response.status,
           },
         };
@@ -425,7 +471,7 @@ export function subscribeErpEvents(onEvent: (evt: ErpRealtimeEvent) => void): ()
   let source: EventSource | null = null;
 
   try {
-    source = new EventSource('/api/erp/events', { withCredentials: true });
+    source = new EventSource(resolveApiUrl('/api/erp/events'), { withCredentials: true });
     source.addEventListener('db-change', (msg: MessageEvent) => {
       if (closed || !msg.data) return;
       try {

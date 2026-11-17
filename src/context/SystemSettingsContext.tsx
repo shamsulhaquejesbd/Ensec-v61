@@ -9,7 +9,7 @@
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { apiRequest } from '../lib/apiClient.ts';
+import { apiRequest, resolveApiUrl } from '../lib/apiClient.ts';
 
 export interface SystemBranding {
   softwareName: string;
@@ -99,7 +99,7 @@ export const SystemSettingsProvider: React.FC<{ children: React.ReactNode }> = (
 
   const refreshBranding = useCallback(async (): Promise<SystemBranding> => {
     try {
-      const response = await fetch('/api/system/branding', {
+      const response = await fetch(resolveApiUrl('/api/system/branding'), {
         method: 'GET',
         credentials: 'include',
         cache: 'no-store',
@@ -163,7 +163,7 @@ export const SystemSettingsProvider: React.FC<{ children: React.ReactNode }> = (
 
     (async () => {
       try {
-        const response = await fetch('/api/system/branding', {
+        const response = await fetch(resolveApiUrl('/api/system/branding'), {
           method: 'GET',
           credentials: 'include',
           cache: 'no-store',
